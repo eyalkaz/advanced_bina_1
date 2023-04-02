@@ -32,7 +32,7 @@ from .utils.opponent_model import OpponentModel
 
 class TemplateAgent(DefaultParty):
     """
-    Template of a Python geniusweb agent.
+    
     """
 
     def __init__(self):
@@ -80,6 +80,18 @@ class TemplateAgent(DefaultParty):
             self.profile = profile_connection.getProfile()
             self.domain = self.profile.getDomain()
             profile_connection.close()
+
+            domain = self.profile.getDomain()
+            
+            all_bids = AllBidsList(domain)
+            self.allMyBidsSorted = list(all_bids)
+            self.allMyBidsSorted.sort(reverse=True,key=self.profile.getUtility)
+            self.turn = 0
+            self.reservation_bid = self.profile.getReservationBid()
+            if self.reservation_bid == None:
+                self.reservation_bid = self.allMyBidsSorted[-1]
+            self.maxBid = self.reservation_bid
+
 
         # ActionDone informs you of an action (an offer or an accept)
         # that is performed by one of the agents (including yourself).
@@ -168,6 +180,8 @@ class TemplateAgent(DefaultParty):
             action = Accept(self.me, self.last_received_bid)
         else:
             # if not, find a bid to propose as counter offer
+            if self.turn < len(self.allMyBidsSorted):
+                self.turn+=1
             bid = self.find_bid()
             action = Offer(self.me, bid)
 
@@ -191,33 +205,23 @@ class TemplateAgent(DefaultParty):
         if bid is None:
             return False
 
+        if self.profile.getUtility(bid) >= self.profile.getUtility(self.maxBid):
+            self.maxBid = bid
         # progress of the negotiation session between 0 and 1 (1 is deadline)
         progress = self.progress.get(time() * 1000)
-
-        # very basic approach that accepts if the offer is valued above 0.7 and
-        # 95% of the time towards the deadline has passed
+        check_reservation = self.profile.getUtility(bid) >= self.profile.getUtility(self.reservation_bid)
         conditions = [
-            self.profile.getUtility(bid) > 0.8,
-            progress > 0.95,
+            self.profile.getUtility(bid) >= 2 * self.profile.getUtility(self.find_bid()) and check_reservation,
+            progress > 0.98 and check_reservation,
         ]
-        return all(conditions)
+        return any(conditions)
 
     def find_bid(self) -> Bid:
-        # compose a list of all possible bids
-        domain = self.profile.getDomain()
-        all_bids = AllBidsList(domain)
-
-        best_bid_score = 0.0
-        best_bid = None
-
-        # take 500 attempts to find a bid according to a heuristic score
-        for _ in range(500):
-            bid = all_bids.get(randint(0, all_bids.size() - 1))
-            bid_score = self.score_bid(bid)
-            if bid_score > best_bid_score:
-                best_bid_score, best_bid = bid_score, bid
-
-        return best_bid
+        progress = self.progress.get(time() * 1000)
+        if progress > 0.95:
+            return self.maxBid
+        return self.allMyBidsSorted[randint(0,(self.turn-1)%10)]
+        #return self.allMyBidsSorted[0]
 
     def score_bid(self, bid: Bid, alpha: float = 0.95, eps: float = 0.1) -> float:
         """Calculate heuristic score for a bid
