@@ -30,7 +30,7 @@ from tudelft_utilities_logging.ReportToLogger import ReportToLogger
 from .utils.opponent_model import OpponentModel
 
 
-class TemplateAgent(DefaultParty):
+class TripleE(DefaultParty):
     """
     
     """
@@ -53,7 +53,7 @@ class TemplateAgent(DefaultParty):
         self.logger.log(logging.INFO, "party is initialized")
 
     def notifyChange(self, data: Inform):
-        """MUST BE IMPLEMENTED
+        """
         This is the entry point of all interaction with your agent after is has been initialised.
         How to handle the received data is based on its class type.
 
@@ -90,7 +90,9 @@ class TemplateAgent(DefaultParty):
             self.reservation_bid = self.profile.getReservationBid()
             if self.reservation_bid == None:
                 self.reservation_bid = self.allMyBidsSorted[-1]
+            self.resUtil = self.profile.getUtility(self.reservation_bid)
             self.maxBid = self.reservation_bid
+            self.maxBidUtil = self.profile.getUtility(self.maxBid)
 
 
         # ActionDone informs you of an action (an offer or an accept)
@@ -121,16 +123,12 @@ class TemplateAgent(DefaultParty):
             self.logger.log(logging.WARNING, "Ignoring unknown info " + str(data))
 
     def getCapabilities(self) -> Capabilities:
-        """MUST BE IMPLEMENTED
-        Method to indicate to the protocol what the capabilities of this agent are.
-        Leave it as is for the ANL 2022 competition
-
+        """
         Returns:
             Capabilities: Capabilities representation class
         """
         return Capabilities(
             set(["SAOP"]),
-            set(["geniusweb.profile.utilityspace.LinearAdditive"]),
         )
 
     def send_action(self, action: Action):
@@ -143,13 +141,11 @@ class TemplateAgent(DefaultParty):
 
     # give a description of your agent
     def getDescription(self) -> str:
-        """MUST BE IMPLEMENTED
-        Returns a description of your agent. 1 or 2 sentences.
-
+        """
         Returns:
             str: Agent description
         """
-        return "Template agent for the ANL 2022 competition"
+        return "TripleE agent for the ANL 2023 competition"
 
     def opponent_action(self, action):
         """Process an action that was received from the opponent.
@@ -182,7 +178,7 @@ class TemplateAgent(DefaultParty):
             # if not, find a bid to propose as counter offer
             if self.turn < len(self.allMyBidsSorted):
                 self.turn+=1
-            bid = self.find_bid()
+            bid, _ = self.find_bid()
             action = Offer(self.me, bid)
 
         # send the action
@@ -197,55 +193,26 @@ class TemplateAgent(DefaultParty):
         with open(f"{self.storage_dir}/data.md", "w") as f:
             f.write(data)
 
-    ###########################################################################################
-    ################################## Example methods below ##################################
-    ###########################################################################################
-
     def accept_condition(self, bid: Bid) -> bool:
         if bid is None:
             return False
 
-        if self.profile.getUtility(bid) >= self.profile.getUtility(self.maxBid):
+        bid_util = self.profile.getUtility(bid)
+        if bid_util >= self.maxBidUtil:
             self.maxBid = bid
+            self.maxBidUtil = bid_util
         # progress of the negotiation session between 0 and 1 (1 is deadline)
         progress = self.progress.get(time() * 1000)
-        check_reservation = self.profile.getUtility(bid) >= self.profile.getUtility(self.reservation_bid)
-        conditions = [
-            self.profile.getUtility(bid) >= 2 * self.profile.getUtility(self.find_bid()) and check_reservation,
-            progress > 0.98 and check_reservation,
-        ]
-        return any(conditions)
+        check_reservation = bid_util >= self.resUtil
+        _,util = self.find_bid()
+        return  (bid_util >= 2 * util and check_reservation) or (progress > 0.98 and check_reservation)
 
     def find_bid(self) -> Bid:
         progress = self.progress.get(time() * 1000)
         if progress > 0.95:
-            return self.maxBid
-        return self.allMyBidsSorted[randint(0,(self.turn-1)%10)]
-        #return self.allMyBidsSorted[0]
-
-    def score_bid(self, bid: Bid, alpha: float = 0.95, eps: float = 0.1) -> float:
-        """Calculate heuristic score for a bid
-
-        Args:
-            bid (Bid): Bid to score
-            alpha (float, optional): Trade-off factor between self interested and
-                altruistic behaviour. Defaults to 0.95.
-            eps (float, optional): Time pressure factor, balances between conceding
-                and Boulware behaviour over time. Defaults to 0.1.
-
-        Returns:
-            float: score
-        """
-        progress = self.progress.get(time() * 1000)
-
-        our_utility = float(self.profile.getUtility(bid))
-
-        time_pressure = 1.0 - progress ** (1 / eps)
-        score = alpha * time_pressure * our_utility
-
-        if self.opponent_model is not None:
-            opponent_utility = self.opponent_model.get_predicted_utility(bid)
-            opponent_score = (1.0 - alpha * time_pressure) * opponent_utility
-            score += opponent_score
-
-        return score
+            return self.maxBid, self.maxBidUtil
+        opt_bid = self.allMyBidsSorted[randint(0,10)%len(self.allMyBidsSorted)]
+        opt_bidUtil = self.profile.getUtility(opt_bid)
+        if opt_bidUtil < self.maxBidUtil:
+            return self.maxBid, self.maxBidUtil
+        return opt_bid, opt_bidUtil

@@ -18,8 +18,8 @@ if not RESULTS_DIR.exists():
 tournament_settings = {
     "agents": [
         {
-            "class": "agents.template_agent.template_agent.TemplateAgent",
-            "parameters": {"storage_dir": "agent_storage/TemplateAgent"},
+            "class": "agents.TripleE_agent.TripleE_agent.TripleE",
+            "parameters": {"storage_dir": "agent_storage/TripleE"},
         },
         {
             "class": "agents.boulware_agent.boulware_agent.BoulwareAgent",
@@ -119,7 +119,7 @@ tournament_settings = {
         ["domains/domain00/profileA.json", "domains/domain00/profileB.json"],
         ["domains/domain01/profileA.json", "domains/domain01/profileB.json"],
     ],
-    "deadline_time_ms": 10000,
+    "deadline_time_ms": 500,
 }
 
 # run a session and obtain results in dictionaries
